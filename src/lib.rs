@@ -9,6 +9,7 @@ struct Transaction {
     method: PaymentMethod,
     card: Card,
 }
+
 #[derive(PartialEq, Debug)]
 enum PayableStatus {
     Paid,
@@ -30,7 +31,7 @@ impl Payable {
         }
     }
 
-    fn calculate_fee(self) -> f32 {
+    fn calculate_fee(&self) -> f32 {
         let fee = {
             match self.tx.method {
                 PaymentMethod::Debit => DEFAULT_FEE_FOR_DEBIT,
@@ -81,14 +82,17 @@ enum PaymentMethod {
 
 use chrono::{DateTime, Local, Days};
 
-fn make_payable(tx: Transaction) -> Payable {
-    let now = Local::now().date_naive();
-    
-    match tx.method {
-        PaymentMethod::Debit => Payable::new(PayableStatus::Paid, tx, now.to_string()),
-        PaymentMethod::Credit => {
-            let thirty_days_later = now.checked_add_days(Days::new(DEFAULT_DAYS_FOR_CREDIT_PAYABLE));
-            Payable::new(PayableStatus::WaitingFunds, tx, thirty_days_later.unwrap().to_string())
+impl From<Transaction> for Payable {
+    fn from(tx: Transaction) -> Self {
+        let now = Local::now().date_naive();
+        match tx.method {
+            PaymentMethod::Credit => {
+                let thirty_days_later = now.checked_add_days(Days::new(DEFAULT_DAYS_FOR_CREDIT_PAYABLE));
+                Payable::new(PayableStatus::WaitingFunds, tx, thirty_days_later.unwrap().to_string())
+            }
+            PaymentMethod::Debit => {
+                Payable::new(PayableStatus::Paid, tx, now.to_string())
+            }
         }
     }
 }
@@ -126,11 +130,11 @@ mod tests {
         let card = Card::new("12345678".to_owned(), "Rafael Dias".to_owned(), "12/30".to_owned(), "123".to_owned());
         let tx = Transaction::new(100.0, "Test Transaction".to_owned(), PaymentMethod::Debit, card);
         
-        let payable = make_payable(tx);
+        let payable = Payable::from(tx);
         let today = Local::now().date_naive();
 
         assert_eq!(payable.status, PayableStatus::Paid);
-        assert_eq!(payable.fee, 3.0);
+        assert_eq!(payable.calculate_fee(), 3.0);
         assert_eq!(payable.date, today.to_string());
     }
 
@@ -139,11 +143,11 @@ mod tests {
         let card = Card::new("12345678".to_owned(), "Rafael Dias".to_owned(), "12/30".to_owned(), "123".to_owned());
         let tx = Transaction::new(100.0, "Test Transaction".to_owned(), PaymentMethod::Credit, card);
 
-        let payable = make_payable(tx);
+        let payable = Payable::from(tx);
         let thirty_days_later = Local::now().date_naive().checked_add_days(Days::new(DEFAULT_DAYS_FOR_CREDIT_PAYABLE));
 
         assert_eq!(payable.status, PayableStatus::WaitingFunds);
-        assert_eq!(payable.fee, 5.0);
+        assert_eq!(payable.calculate_fee(), 5.0);
         assert_eq!(payable.date, thirty_days_later.unwrap().to_string());
     }
 
