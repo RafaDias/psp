@@ -19,7 +19,6 @@ struct Payable {
     status:PayableStatus,
     tx: Transaction,
     date: String,
-    fee: f32,
 }
 
 impl Payable {
@@ -28,7 +27,6 @@ impl Payable {
             status,
             tx,
             date,
-            fee: 0.0,
         }
     }
 
